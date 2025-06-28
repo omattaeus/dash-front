@@ -31,9 +31,6 @@ const Login = () => {
       name: isRegisterMode ? name : 'N/A' 
     });
 
-    // Adicione esta linha para pausar a execução
-    debugger;
-
     try {
       let result;
       
@@ -51,17 +48,12 @@ const Login = () => {
 
       console.log('📥 Login: Resultado recebido:', result);
       
-      // Outro debugger para ver o resultado
-      debugger;
-
       if (result && result.success) {
         console.log('✅ Login: Sucesso! Aguardando atualização do estado...');
         
-        // Aguardar um pouco para o estado ser atualizado
         setTimeout(() => {
           console.log('🔄 Login: Redirecionando para dashboard...');
           navigate('/dashboard');
-          debugger;
         }, 100);
         
       } else {
