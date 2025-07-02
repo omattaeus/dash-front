@@ -18,13 +18,31 @@ const usePackages = () => {
       
       console.log('📥 usePackages: Resultado recebido:', result);
       
-      if (result && result.packages) {
-        setPackages(result.packages);
-        console.log('✅ usePackages: Pacotes definidos:', result.packages.length);
-      } else {
-        console.log('⚠️ usePackages: Nenhum pacote encontrado ou resultado inválido');
-        setPackages([]);
+      // ✅ TRATAR DIFERENTES FORMATOS DE RESPOSTA
+      let packagesData = [];
+      
+      if (result) {
+        // Formato esperado: { packages: [...] }
+        if (result.packages && Array.isArray(result.packages)) {
+          packagesData = result.packages;
+        }
+        // Formato alternativo: { data: [...] }
+        else if (result.data && Array.isArray(result.data)) {
+          packagesData = result.data;
+        }
+        // Formato direto: [...]
+        else if (Array.isArray(result)) {
+          packagesData = result;
+        }
+        // Formato com success: { success: true, data: [...] }
+        else if (result.success && result.data && Array.isArray(result.data)) {
+          packagesData = result.data;
+        }
       }
+      
+      setPackages(packagesData);
+      console.log('✅ usePackages: Pacotes definidos:', packagesData.length);
+      
     } catch (err) {
       console.error('❌ usePackages: Erro ao buscar pacotes:', err);
       setError(err.message || 'Erro ao carregar pacotes');
@@ -51,6 +69,7 @@ const usePackages = () => {
       
       console.log('✅ usePackages: Pacote criado:', result);
       
+      // ✅ RECARREGAR LISTA APÓS CRIAR
       await fetchPackages();
       return result;
     } catch (err) {
@@ -62,6 +81,7 @@ const usePackages = () => {
     }
   }, [fetchPackages]);
 
+  // ✅ DEFINIR TODAS AS FUNÇÕES ANTES DO RETURN
   const updatePackage = useCallback(async (id, packageData) => {
     try {
       setLoading(true);
@@ -182,7 +202,6 @@ const usePackages = () => {
     }
   }, [fetchPackages]);
 
-  // ADICIONE ESTE MÉTODO QUE ESTAVA FALTANDO
   const syncCorreiosFromAfterShip = useCallback(async (filtros = {}) => {
     try {
       setLoading(true);
@@ -216,11 +235,11 @@ const usePackages = () => {
     initialized,
     fetchPackages: refetch,
     createPackage,
-    updatePackage,
-    deletePackage,
-    updateTracking,
+    updatePackage,        // ← Agora está definida
+    deletePackage,        // ← Agora está definida
+    updateTracking,       // ← Agora está definida
     importPackages,
-    syncWithAfterShip,
+    syncWithAfterShip,    // ← Agora está definida
     syncAllFromAfterShip,
     syncCorreiosFromAfterShip,
     refetch

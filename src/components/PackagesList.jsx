@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -20,7 +20,6 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@/components/ui/dialog';
 import { 
   Search, 
@@ -63,7 +62,7 @@ const PackagesList = () => {
   const [isSyncing, setIsSyncing] = useState(false);
   const [isSyncingCorreios, setIsSyncingCorreios] = useState(false);
 
-  // Estados do modal unificado
+  // ✅ Estados do modal separados e otimizados
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [isDetecting, setIsDetecting] = useState(false);
@@ -79,65 +78,72 @@ const PackagesList = () => {
     notes: '',
   });
 
+  // ✅ Carregar pacotes apenas uma vez
   useEffect(() => {
     if (!packages.length && !loading) {
       refetch();
     }
-  }, []);
+  }, [packages.length, loading, refetch]);
 
-  const statuses = [
+  // ✅ Memoizar dados estáticos
+  const statuses = useMemo(() => [
     { value: 'pending', label: 'Pendente' },
     { value: 'in_transit', label: 'Em Trânsito' },
     { value: 'delivered', label: 'Entregue' },
     { value: 'exception', label: 'Problema' },
     { value: 'expired', label: 'Expirado' }
-  ];
+  ], []);
 
-  const filteredPackages = packages.filter(pkg => {
-    const matchesSearch = 
-      (pkg.trackingNumber || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (pkg.title || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (pkg.customerName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (pkg.notes || '').toLowerCase().includes(searchTerm.toLowerCase());
-    
-    const matchesStatus = statusFilter === 'all' || pkg.status === statusFilter;
-    const matchesCarrier = carrierFilter === 'all' || pkg.carrierSlug === carrierFilter;
-    
-    return matchesSearch && matchesStatus && matchesCarrier;
-  });
-
-  // Funções do modal
-  const openModal = () => {
-    setIsModalOpen(true);
-  };
-
-  const closeModal = () => {
-    setIsModalOpen(false);
-    resetForm();
-  };
-
-  const resetForm = () => {
-    setFormData({
-      tracking_number: '',
-      carrier_slug: '',
-      title: '',
-      customer_name: '',
-      customer_cpf: '',
-      customer_email: '',
-      order_id: '',
-      notes: '',
+  // ✅ Memoizar pacotes filtrados
+  const filteredPackages = useMemo(() => {
+    return packages.filter(pkg => {
+      const matchesSearch = 
+        (pkg.trackingNumber || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (pkg.title || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (pkg.customerName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (pkg.notes || '').toLowerCase().includes(searchTerm.toLowerCase());
+      
+      const matchesStatus = statusFilter === 'all' || pkg.status === statusFilter;
+      const matchesCarrier = carrierFilter === 'all' || pkg.carrierSlug === carrierFilter;
+      
+      return matchesSearch && matchesStatus && matchesCarrier;
     });
-    setShowSuccess(false);
-  };
+  }, [packages, searchTerm, statusFilter, carrierFilter]);
 
-  const handleInputChange = (field, value) => {
+  // ✅ Funções do modal otimizadas com useCallback
+  const openModal = useCallback(() => {
+    setIsModalOpen(true);
+    setShowSuccess(false);
+  }, []);
+
+  const closeModal = useCallback(() => {
+    setIsModalOpen(false);
+    setShowSuccess(false);
+    // Reset form após um pequeno delay para evitar conflitos
+    setTimeout(() => {
+      setFormData({
+        tracking_number: '',
+        carrier_slug: '',
+        title: '',
+        customer_name: '',
+        customer_cpf: '',
+        customer_email: '',
+        order_id: '',
+        notes: '',
+      });
+    }, 100);
+  }, []);
+
+  // ✅ Função para atualizar form data otimizada
+  const handleInputChange = useCallback((field, value) => {
     setFormData(prev => ({
       ...prev,
       [field]: value
     }));
-  };
+  }, []);
 
-  const handleDetectCarrier = async () => {
+  // ✅ Detecção de transportadora com debounce
+  const handleDetectCarrier = useCallback(async () => {
     if (!formData.tracking_number.trim()) {
       alert('Digite um código de rastreamento primeiro');
       return;
@@ -148,12 +154,11 @@ const PackagesList = () => {
       const detected = await detectCourier(formData.tracking_number);
       
       if (detected && detected.length > 0) {
-        handleInputChange('carrier_slug', detected[0].slug);
-        
-        // Auto-preencher título se vazio
-        if (!formData.title) {
-          handleInputChange('title', `Encomenda ${formData.tracking_number}`);
-        }
+        setFormData(prev => ({
+          ...prev,
+          carrier_slug: detected[0].slug,
+          title: prev.title || `Encomenda ${prev.tracking_number}`
+        }));
         
         alert(`Transportadora detectada: ${detected[0].name}`);
       } else {
@@ -165,9 +170,10 @@ const PackagesList = () => {
     } finally {
       setIsDetecting(false);
     }
-  };
+  }, [formData.tracking_number, detectCourier]);
 
-  const handleSubmitForm = async (e) => {
+  // ✅ Submit do formulário otimizado
+  const handleSubmitForm = useCallback(async (e) => {
     e.preventDefault();
     
     if (!formData.tracking_number.trim()) {
@@ -180,10 +186,9 @@ const PackagesList = () => {
       await createPackage(formData);
       setShowSuccess(true);
       
-      // Resetar formulário e fechar modal após 2 segundos
+      // Fechar modal após 2 segundos
       setTimeout(() => {
         closeModal();
-        refetch();
       }, 2000);
     } catch (error) {
       console.error('Erro ao criar encomenda:', error);
@@ -191,40 +196,41 @@ const PackagesList = () => {
     } finally {
       setIsCreating(false);
     }
-  };
+  }, [formData, createPackage, closeModal]);
 
-  // Funções existentes
-  const handleSelectAll = (checked) => {
+  // ✅ Outras funções otimizadas
+  const handleSelectAll = useCallback((checked) => {
     if (checked) {
       setSelectedPackages(filteredPackages.map(pkg => pkg.id));
     } else {
       setSelectedPackages([]);
     }
-  };
+  }, [filteredPackages]);
 
-  const handleSelectPackage = (packageId, checked) => {
-    if (checked) {
-      setSelectedPackages([...selectedPackages, packageId]);
-    } else {
-      setSelectedPackages(selectedPackages.filter(id => id !== packageId));
-    }
-  };
+  const handleSelectPackage = useCallback((packageId, checked) => {
+    setSelectedPackages(prev => {
+      if (checked) {
+        return [...prev, packageId];
+      } else {
+        return prev.filter(id => id !== packageId);
+      }
+    });
+  }, []);
 
-  const handleUpdateSelected = async () => {
+  const handleUpdateSelected = useCallback(async () => {
     setIsUpdating(true);
     try {
       const promises = selectedPackages.map(id => updateTracking(id));
       await Promise.all(promises);
       setSelectedPackages([]);
-      refetch();
     } catch (error) {
       console.error('Erro ao atualizar selecionados:', error);
     } finally {
       setIsUpdating(false);
     }
-  };
+  }, [selectedPackages, updateTracking]);
 
-  const handleDeleteSelected = async () => {
+  const handleDeleteSelected = useCallback(async () => {
     if (!confirm(`Tem certeza que deseja excluir ${selectedPackages.length} encomenda(s)?`)) {
       return;
     }
@@ -233,13 +239,12 @@ const PackagesList = () => {
       const promises = selectedPackages.map(id => deletePackage(id));
       await Promise.all(promises);
       setSelectedPackages([]);
-      refetch();
     } catch (error) {
       console.error('Erro ao excluir selecionados:', error);
     }
-  };
+  }, [selectedPackages, deletePackage]);
 
-  const handleSyncAll = async () => {
+  const handleSyncAll = useCallback(async () => {
     if (!confirm('Isso irá importar todos os trackings do AfterShip. Continuar?')) {
       return;
     }
@@ -253,9 +258,9 @@ const PackagesList = () => {
     } finally {
       setIsSyncing(false);
     }
-  };
+  }, [syncAllFromAfterShip]);
 
-  const handleSyncCorreios = async () => {
+  const handleSyncCorreios = useCallback(async () => {
     if (!confirm('Isso irá importar apenas as encomendas dos Correios do AfterShip. Continuar?')) {
       return;
     }
@@ -269,9 +274,10 @@ const PackagesList = () => {
     } finally {
       setIsSyncingCorreios(false);
     }
-  };
+  }, [syncCorreiosFromAfterShip]);
 
-  const getStatusLabel = (status) => {
+  // ✅ Funções utilitárias memoizadas
+  const getStatusLabel = useCallback((status) => {
     const statusMap = {
       'pending': 'Pendente',
       'in_transit': 'Em Trânsito',
@@ -280,9 +286,9 @@ const PackagesList = () => {
       'expired': 'Expirado'
     };
     return statusMap[status] || status;
-  };
+  }, []);
 
-  const getStatusColor = (status) => {
+  const getStatusColor = useCallback((status) => {
     const colorMap = {
       'pending': 'bg-gray-100 text-gray-800',
       'in_transit': 'bg-yellow-100 text-yellow-800',
@@ -291,9 +297,9 @@ const PackagesList = () => {
       'expired': 'bg-red-100 text-red-800'
     };
     return colorMap[status] || 'bg-gray-100 text-gray-800';
-  };
+  }, []);
 
-  const getTimeAgo = (dateString) => {
+  const getTimeAgo = useCallback((dateString) => {
     if (!dateString) return 'Nunca';
     
     const date = new Date(dateString);
@@ -308,17 +314,27 @@ const PackagesList = () => {
     
     const diffInDays = Math.floor(diffInHours / 24);
     return `${diffInDays} dia${diffInDays > 1 ? 's' : ''} atrás`;
-  };
+  }, []);
 
-  const itemsPerPage = 10;
-  const totalPages = Math.ceil(filteredPackages.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedPackages = filteredPackages.slice(startIndex, startIndex + itemsPerPage);
+  // ✅ Cálculos de paginação memoizados
+  const paginationData = useMemo(() => {
+    const itemsPerPage = 10;
+    const totalPages = Math.ceil(filteredPackages.length / itemsPerPage);
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const paginatedPackages = filteredPackages.slice(startIndex, startIndex + itemsPerPage);
+    
+    return {
+      itemsPerPage,
+      totalPages,
+      startIndex,
+      paginatedPackages
+    };
+  }, [filteredPackages, currentPage]);
 
   const isAnyLoading = loading || isSyncing || isSyncingCorreios;
 
-  // Componente do Modal de Nova Encomenda
-  const NewPackageModal = () => (
+  // ✅ Componente do Modal otimizado
+  const NewPackageModal = useMemo(() => (
     <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
@@ -360,6 +376,7 @@ const PackagesList = () => {
                   className="flex-1"
                   required
                   disabled={isCreating}
+                  autoComplete="off"
                 />
                 <Button
                   type="button"
@@ -407,6 +424,7 @@ const PackagesList = () => {
                 value={formData.title}
                 onChange={(e) => handleInputChange('title', e.target.value)}
                 disabled={isCreating}
+                autoComplete="off"
               />
             </div>
 
@@ -421,6 +439,7 @@ const PackagesList = () => {
                   value={formData.customer_name}
                   onChange={(e) => handleInputChange('customer_name', e.target.value)}
                   disabled={isCreating}
+                  autoComplete="off"
                 />
               </div>
               <div className="space-y-2">
@@ -432,6 +451,7 @@ const PackagesList = () => {
                   value={formData.customer_cpf}
                   onChange={(e) => handleInputChange('customer_cpf', e.target.value)}
                   disabled={isCreating}
+                  autoComplete="off"
                 />
               </div>
             </div>
@@ -446,6 +466,7 @@ const PackagesList = () => {
                   value={formData.customer_email}
                   onChange={(e) => handleInputChange('customer_email', e.target.value)}
                   disabled={isCreating}
+                  autoComplete="off"
                 />
               </div>
               <div className="space-y-2">
@@ -457,6 +478,7 @@ const PackagesList = () => {
                   value={formData.order_id}
                   onChange={(e) => handleInputChange('order_id', e.target.value)}
                   disabled={isCreating}
+                  autoComplete="off"
                 />
               </div>
             </div>
@@ -507,7 +529,7 @@ const PackagesList = () => {
         )}
       </DialogContent>
     </Dialog>
-  );
+  ), [isModalOpen, showSuccess, formData, isCreating, isDetecting, couriers, handleSubmitForm, handleInputChange, handleDetectCarrier, closeModal]);
 
   if (loading && packages.length === 0) {
     return (
@@ -655,7 +677,7 @@ const PackagesList = () => {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {paginatedPackages.length > 0 ? (
+          {paginationData.paginatedPackages.length > 0 ? (
             <>
               <div className="overflow-x-auto">
                 <table className="w-full">
@@ -676,7 +698,7 @@ const PackagesList = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {paginatedPackages.map((pkg) => (
+                    {paginationData.paginatedPackages.map((pkg) => (
                       <tr key={pkg.id} className="border-b hover:bg-gray-50">
                         <td className="p-3">
                           <Checkbox
@@ -749,10 +771,10 @@ const PackagesList = () => {
                 </table>
               </div>
 
-              {totalPages > 1 && (
+              {paginationData.totalPages > 1 && (
                 <div className="flex items-center justify-between mt-6">
                   <p className="text-sm text-gray-600">
-                    Mostrando {startIndex + 1} a {Math.min(startIndex + itemsPerPage, filteredPackages.length)} de {filteredPackages.length} resultados
+                    Mostrando {paginationData.startIndex + 1} a {Math.min(paginationData.startIndex + paginationData.itemsPerPage, filteredPackages.length)} de {filteredPackages.length} resultados
                   </p>
                   <div className="flex space-x-2">
                     <Button
@@ -765,7 +787,7 @@ const PackagesList = () => {
                       Anterior
                     </Button>
                     
-                    {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
+                    {Array.from({ length: Math.min(paginationData.totalPages, 5) }, (_, i) => {
                       const page = i + 1;
                       return (
                         <Button
@@ -784,7 +806,7 @@ const PackagesList = () => {
                       variant="outline"
                       size="sm"
                       onClick={() => setCurrentPage(currentPage + 1)}
-                      disabled={currentPage === totalPages || isAnyLoading}
+                      disabled={currentPage === paginationData.totalPages || isAnyLoading}
                     >
                       Próximo
                       <ChevronRight className="h-4 w-4" />
@@ -827,7 +849,7 @@ const PackagesList = () => {
         </CardContent>
       </Card>
 
-      <NewPackageModal />
+      {NewPackageModal}
     </div>
   );
 };
