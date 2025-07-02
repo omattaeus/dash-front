@@ -366,9 +366,12 @@ class ApiService {
       }
       
       console.log('📦 ApiService: Atualizando rastreamento:', id);
+      
       return await this.request(`/packages/${id}/track`, {
         method: 'POST',
+        body: JSON.stringify({}),
       });
+      
     } catch (error) {
       console.error('❌ ApiService: Erro ao atualizar rastreamento:', error);
       throw error;
