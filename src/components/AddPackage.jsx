@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,7 +13,8 @@ import {
   CheckCircle, 
   AlertTriangle,
   Loader2,
-  Search
+  Search,
+  DollarSign
 } from 'lucide-react';
 import usePackages from '../hooks/usePackages';
 import useCouriers from '../hooks/useCouriers';
@@ -36,7 +37,8 @@ const AddPackage = () => {
     customer_email: '',
     order_id: '',
     notes: '',
-    previous_tracking_number: ''
+    previous_tracking_number: '',
+    value: '' // ✅ NOVO CAMPO DE VALOR
   });
   const [detectedCouriers, setDetectedCouriers] = useState([]);
   const [isDetecting, setIsDetecting] = useState(false);
@@ -46,11 +48,52 @@ const AddPackage = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
+  // ✅ FUNÇÃO PARA FORMATAÇÃO DE MOEDA BRASILEIRA
+  const formatCurrency = useCallback((value) => {
+    // Remove tudo que não é dígito
+    const numericValue = value.replace(/\D/g, '');
+    
+    // Se não há valor, retorna vazio
+    if (!numericValue) return '';
+    
+    // Converte para número e divide por 100 para ter centavos
+    const number = parseInt(numericValue) / 100;
+    
+    // Formata como moeda brasileira
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL',
+      minimumFractionDigits: 2,
+    }).format(number);
+  }, []);
+
+  // ✅ FUNÇÃO PARA CONVERTER MOEDA FORMATADA PARA NÚMERO
+  const parseCurrency = useCallback((formattedValue) => {
+    if (!formattedValue) return 0;
+    
+    // Remove R$, espaços, pontos de milhares e substitui vírgula por ponto
+    const numericString = formattedValue
+      .replace(/R\$\s?/g, '')
+      .replace(/\./g, '')
+      .replace(',', '.');
+    
+    return parseFloat(numericString) || 0;
+  }, []);
+
   const handleInputChange = (field, value) => {
-    setFormData(prev => ({
-      ...prev,
-      [field]: value
-    }));
+    if (field === 'value') {
+      // ✅ FORMATAÇÃO AUTOMÁTICA DO VALOR
+      const formattedValue = formatCurrency(value);
+      setFormData(prev => ({
+        ...prev,
+        [field]: formattedValue
+      }));
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        [field]: value
+      }));
+    }
     
     // Auto-detectar transportadora quando o número de rastreamento mudar
     if (field === 'tracking_number' && value.length > 5) {
@@ -89,7 +132,13 @@ const AddPackage = () => {
     }
 
     try {
-      await createPackage(formData);
+      // ✅ CONVERTER VALOR FORMATADO PARA NÚMERO ANTES DE ENVIAR
+      const dataToSend = {
+        ...formData,
+        value: formData.value ? parseCurrency(formData.value) : null
+      };
+      
+      await createPackage(dataToSend);
       setSuccess('Encomenda adicionada com sucesso!');
       
       // Limpar formulário
@@ -103,7 +152,8 @@ const AddPackage = () => {
         customer_email: '',
         order_id: '',
         notes: '',
-        previous_tracking_number: ''
+        previous_tracking_number: '',
+        value: '' // ✅ RESETAR VALOR
       });
       setDetectedCouriers([]);
       
@@ -133,7 +183,7 @@ const AddPackage = () => {
       const fileExtension = file.name.toLowerCase().substring(file.name.lastIndexOf('.'));
       
       if (!supportedTypes.includes(file.type) && !supportedExtensions.includes(fileExtension)) {
-        setError('Formato de arquivo não suportado. Use CSV, XLS, XLSX, XLSM ou XLSB.');
+                setError('Formato de arquivo não suportado. Use CSV, XLS, XLSX, XLSM ou XLSB.');
         return;
       }
 
@@ -208,8 +258,8 @@ const AddPackage = () => {
   };
 
   const downloadTemplate = () => {
-    // Template baseado no Excel real
-    const csvContent = 'CÓDIGO,PRODUTO,NOME E TELEFONE,ID PEDIDO,OBSERVAÇÃO 1 (STATUS CORREIOS),PRAZO FINAL,VALOR TAXA,TROCA DE RASTREIO?\nOY105082335BR,Smartwatch XYZ,Maria Silva - (21)98765-4321,PED999,Produto entregue sem problemas,2024-12-31,R$ 150.75,BR987654321BR\n';
+    // ✅ TEMPLATE ATUALIZADO COM CAMPO DE VALOR
+    const csvContent = 'CÓDIGO,PRODUTO,NOME E TELEFONE,ID PEDIDO,VALOR TAXA,OBSERVAÇÃO 1 (STATUS CORREIOS),PRAZO FINAL,TROCA DE RASTREIO?\nOY105082335BR,Smartwatch XYZ,Maria Silva - (21)98765-4321,PED999,150.75,Produto entregue sem problemas,2024-12-31,BR987654321BR\n';
     
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8' });
     const url = window.URL.createObjectURL(blob);
@@ -316,6 +366,21 @@ const AddPackage = () => {
                     onChange={(e) => handleInputChange('title', e.target.value)}
                     placeholder="Ex: Notebook Dell"
                   />
+                </div>
+
+                {/* ✅ NOVO CAMPO DE VALOR */}
+                <div className="space-y-2">
+                  <Label htmlFor="value">Valor da Encomenda</Label>
+                  <div className="relative">
+                    <Input
+                      id="value"
+                      type="text"
+                      placeholder="R$ 0,00"
+                      value={formData.value}
+                      onChange={(e) => handleInputChange('value', e.target.value)}
+                      className=""
+                    />
+                  </div>
                 </div>
 
                 <div className="space-y-2">
@@ -601,6 +666,12 @@ const AddPackage = () => {
                         <td className="py-1 text-gray-600">Não</td>
                         <td className="py-1">Identificador único do pedido</td>
                       </tr>
+                      {/* ✅ NOVA LINHA PARA VALOR */}
+                      <tr>
+                        <td className="py-1 font-mono">VALOR TAXA</td>
+                        <td className="py-1 text-gray-600">Não</td>
+                        <td className="py-1">Valor da encomenda em reais (ex: 150.75 ou R$ 150,75)</td>
+                      </tr>
                       <tr>
                         <td className="py-1 font-mono">OBSERVAÇÃO 1 (STATUS CORREIOS)</td>
                         <td className="py-1 text-gray-600">Não</td>
@@ -612,17 +683,22 @@ const AddPackage = () => {
                         <td className="py-1">Data limite para entrega (formato: YYYY-MM-DD)</td>
                       </tr>
                       <tr>
-                        <td className="py-1 font-mono">VALOR TAXA</td>
-                        <td className="py-1 text-gray-600">Não</td>
-                        <td className="py-1">Valor de taxa ou custo (ex: R$ 150,75)</td>
-                      </tr>
-                      <tr>
                         <td className="py-1 font-mono">TROCA DE RASTREIO?</td>
                         <td className="py-1 text-gray-600">Não</td>
                         <td className="py-1">Código de rastreamento anterior (se houver)</td>
                       </tr>
                     </tbody>
                   </table>
+                </div>
+                
+                {/* ✅ EXEMPLO DE FORMATAÇÃO DE VALOR */}
+                <div className="mt-4 p-4 bg-blue-50 rounded-lg">
+                  <h4 className="font-medium text-blue-900 mb-2">💰 Formatação do Campo Valor:</h4>
+                  <ul className="text-sm text-blue-800 space-y-1">
+                    <li>• <strong>Aceita:</strong> 150.75, R$ 150,75, 150,75</li>
+                    <li>• <strong>Resultado:</strong> R$ 150,75</li>
+                    <li>• <strong>Dica:</strong> Use ponto ou vírgula para separar centavos</li>
+                  </ul>
                 </div>
               </div>
             </CardContent>

@@ -34,7 +34,8 @@ import {
   Download,
   Truck,
   Loader2,
-  CheckCircle
+  CheckCircle,
+  DollarSign
 } from 'lucide-react';
 import usePackages from '../hooks/usePackages';
 import useCouriers from '../hooks/useCouriers';
@@ -44,7 +45,7 @@ const PackagesList = () => {
     packages, 
     loading, 
     error, 
-    initialized, // ✅ USAR O INITIALIZED DO HOOK
+    initialized,
     refetch, 
     deletePackage, 
     updateTracking, 
@@ -77,7 +78,40 @@ const PackagesList = () => {
     customer_email: '',
     order_id: '',
     notes: '',
+    value: '', // ✅ NOVO CAMPO DE VALOR
   });
+
+  // ✅ FUNÇÃO PARA FORMATAÇÃO DE MOEDA BRASILEIRA
+  const formatCurrency = useCallback((value) => {
+    // Remove tudo que não é dígito
+    const numericValue = value.replace(/\D/g, '');
+    
+    // Se não há valor, retorna vazio
+    if (!numericValue) return '';
+    
+    // Converte para número e divide por 100 para ter centavos
+    const number = parseInt(numericValue) / 100;
+    
+    // Formata como moeda brasileira
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL',
+      minimumFractionDigits: 2,
+    }).format(number);
+  }, []);
+
+  // ✅ FUNÇÃO PARA CONVERTER MOEDA FORMATADA PARA NÚMERO
+  const parseCurrency = useCallback((formattedValue) => {
+    if (!formattedValue) return 0;
+    
+    // Remove R$, espaços, pontos de milhares e substitui vírgula por ponto
+    const numericString = formattedValue
+      .replace(/R\$\s?/g, '')
+      .replace(/\./g, '')
+      .replace(',', '.');
+    
+    return parseFloat(numericString) || 0;
+  }, []);
 
   // ✅ CARREGAR APENAS UMA VEZ QUANDO O COMPONENTE MONTA
   useEffect(() => {
@@ -132,17 +166,27 @@ const PackagesList = () => {
         customer_email: '',
         order_id: '',
         notes: '',
+        value: '', // ✅ RESETAR VALOR
       });
     }, 100);
   }, []);
 
   // ✅ Função para atualizar form data otimizada
   const handleInputChange = useCallback((field, value) => {
-    setFormData(prev => ({
-      ...prev,
-      [field]: value
-    }));
-  }, []);
+    if (field === 'value') {
+      // ✅ FORMATAÇÃO AUTOMÁTICA DO VALOR
+      const formattedValue = formatCurrency(value);
+      setFormData(prev => ({
+        ...prev,
+        [field]: formattedValue
+      }));
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        [field]: value
+      }));
+    }
+  }, [formatCurrency]);
 
   // ✅ Detecção de transportadora com debounce
   const handleDetectCarrier = useCallback(async () => {
@@ -185,7 +229,13 @@ const PackagesList = () => {
 
     setIsCreating(true);
     try {
-      await createPackage(formData);
+      // ✅ CONVERTER VALOR FORMATADO PARA NÚMERO ANTES DE ENVIAR
+      const dataToSend = {
+        ...formData,
+        value: formData.value ? parseCurrency(formData.value) : null
+      };
+      
+      await createPackage(dataToSend);
       setShowSuccess(true);
       
       // Fechar modal após 2 segundos
@@ -198,9 +248,9 @@ const PackagesList = () => {
     } finally {
       setIsCreating(false);
     }
-  }, [formData, createPackage, closeModal]);
+  }, [formData, createPackage, closeModal, parseCurrency]);
 
-  // ✅ Outras funções otimizadas
+  // ✅ Outras funções otimizadas (mantidas iguais)
   const handleSelectAll = useCallback((checked) => {
     if (checked) {
       setSelectedPackages(filteredPackages.map(pkg => pkg.id));
@@ -341,7 +391,7 @@ const PackagesList = () => {
 
   const isAnyLoading = loading || isSyncing || isSyncingCorreios;
 
-  // ✅ Componente do Modal otimizado
+  // ✅ Componente do Modal otimizado COM CAMPO DE VALOR
   const NewPackageModal = useMemo(() => (
     <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -422,18 +472,37 @@ const PackagesList = () => {
               </Select>
             </div>
 
-            {/* Título */}
-            <div className="space-y-2">
-              <Label htmlFor="title">Título da Encomenda</Label>
-              <Input
-                id="title"
-                type="text"
-                placeholder="Ex: Produto comprado na loja X"
-                value={formData.title}
-                onChange={(e) => handleInputChange('title', e.target.value)}
-                disabled={isCreating}
-                autoComplete="off"
-              />
+            {/* Título e Valor */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="title">Título da Encomenda</Label>
+                <Input
+                  id="title"
+                  type="text"
+                  placeholder="Ex: Produto comprado na loja X"
+                  value={formData.title}
+                  onChange={(e) => handleInputChange('title', e.target.value)}
+                  disabled={isCreating}
+                  autoComplete="off"
+                />
+              </div>
+              
+              {/* ✅ NOVO CAMPO DE VALOR */}
+              <div className="space-y-2">
+                <Label htmlFor="value">Valor da Encomenda</Label>
+                <div className="relative">
+                  <Input
+                    id="value"
+                    type="text"
+                    placeholder="R$ 0,00"
+                    value={formData.value}
+                    onChange={(e) => handleInputChange('value', e.target.value)}
+                    disabled={isCreating}
+                    autoComplete="off"
+                    className=""
+                  />
+                </div>
+              </div>
             </div>
 
             {/* Informações do Cliente */}
@@ -539,6 +608,7 @@ const PackagesList = () => {
     </Dialog>
   ), [isModalOpen, showSuccess, formData, isCreating, isDetecting, couriers, handleSubmitForm, handleInputChange, handleDetectCarrier, closeModal]);
 
+  // ✅ Resto do componente mantido igual...
   if (loading && packages.length === 0) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -723,6 +793,12 @@ const PackagesList = () => {
                             )}
                             {pkg.customerName && (
                               <p className="text-xs text-gray-400">{pkg.customerName}</p>
+                            )}
+                            {/* ✅ MOSTRAR VALOR SE EXISTIR */}
+                            {pkg.value && (
+                              <p className="text-xs text-green-600 font-medium">
+                                {formatCurrency((pkg.value * 100).toString())}
+                              </p>
                             )}
                           </div>
                         </td>

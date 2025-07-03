@@ -46,6 +46,13 @@ const PackageDetails = () => {
         setPackageData(pkg);
         setNotes(pkg.notes || '');
         
+        // Log para debug do preço
+        console.log('💰 Dados de preço recebidos:', {
+          price: pkg.price,
+          formattedPrice: pkg.formattedPrice,
+          hasPrice: pkg.hasPrice
+        });
+        
         // Processar eventos de tracking
         if (pkg.trackingEvents && pkg.trackingEvents.length > 0) {
           const processedEvents = pkg.trackingEvents.map((event, index) => ({
@@ -138,6 +145,41 @@ const PackageDetails = () => {
     } catch {
       return dateString;
     }
+  };
+
+  // ✅ FUNÇÃO ATUALIZADA PARA USAR DADOS DO BACKEND
+  const getPackageValue = () => {
+    // 1. Priorizar formattedPrice se disponível (já formatado pelo backend)
+    if (packageData.formattedPrice) {
+      return packageData.formattedPrice;
+    }
+    
+    // 2. Usar price do banco de dados
+    if (packageData.price !== null && packageData.price !== undefined) {
+      const numericPrice = parseFloat(packageData.price);
+      if (!isNaN(numericPrice) && numericPrice > 0) {
+        return new Intl.NumberFormat('pt-BR', {
+          style: 'currency',
+          currency: 'BRL'
+        }).format(numericPrice);
+      }
+    }
+    
+    // 3. Fallback para campos alternativos (compatibilidade)
+    const fallbackFields = ['value', 'orderValue', 'amount'];
+    for (const field of fallbackFields) {
+      if (packageData[field] !== null && packageData[field] !== undefined) {
+        const numericValue = parseFloat(packageData[field]);
+        if (!isNaN(numericValue) && numericValue > 0) {
+          return new Intl.NumberFormat('pt-BR', {
+            style: 'currency',
+            currency: 'BRL'
+          }).format(numericValue);
+        }
+      }
+    }
+    
+    return 'Não informado';
   };
 
   const getStatusInfo = (status) => {
@@ -304,6 +346,13 @@ const PackageDetails = () => {
               <div>
                 <Label className="text-sm font-medium text-gray-600">Título</Label>
                 <p className="text-lg">{packageData.title || 'Sem título'}</p>
+              </div>
+              
+              <div>
+                <Label className="text-sm font-medium text-gray-600">Valor da Encomenda</Label>
+                <p className="ext-sm font-medium text-gray-600">
+                  {getPackageValue()}
+                </p>
               </div>
               
               <div>
