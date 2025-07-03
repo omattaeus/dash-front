@@ -690,16 +690,6 @@ const AddPackage = () => {
                     </tbody>
                   </table>
                 </div>
-                
-                {/* ✅ EXEMPLO DE FORMATAÇÃO DE VALOR */}
-                <div className="mt-4 p-4 bg-blue-50 rounded-lg">
-                  <h4 className="font-medium text-blue-900 mb-2">💰 Formatação do Campo Valor:</h4>
-                  <ul className="text-sm text-blue-800 space-y-1">
-                    <li>• <strong>Aceita:</strong> 150.75, R$ 150,75, 150,75</li>
-                    <li>• <strong>Resultado:</strong> R$ 150,75</li>
-                    <li>• <strong>Dica:</strong> Use ponto ou vírgula para separar centavos</li>
-                  </ul>
-                </div>
               </div>
             </CardContent>
           </Card>
