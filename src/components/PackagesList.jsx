@@ -44,6 +44,7 @@ const PackagesList = () => {
     packages, 
     loading, 
     error, 
+    initialized, // ✅ USAR O INITIALIZED DO HOOK
     refetch, 
     deletePackage, 
     updateTracking, 
@@ -78,12 +79,13 @@ const PackagesList = () => {
     notes: '',
   });
 
-  // ✅ Carregar pacotes apenas uma vez
+  // ✅ CARREGAR APENAS UMA VEZ QUANDO O COMPONENTE MONTA
   useEffect(() => {
-    if (!packages.length && !loading) {
+    if (!initialized && !loading) {
+      console.log('📦 PackagesList: Carregamento inicial do componente');
       refetch();
     }
-  }, [packages.length, loading, refetch]);
+  }, [initialized, loading, refetch]);
 
   // ✅ Memoizar dados estáticos
   const statuses = useMemo(() => [
@@ -275,6 +277,12 @@ const PackagesList = () => {
       setIsSyncingCorreios(false);
     }
   }, [syncCorreiosFromAfterShip]);
+
+  // ✅ REFETCH MANUAL - SEM LOOP
+  const handleManualRefresh = useCallback(() => {
+    console.log('🔄 PackagesList: Refresh manual solicitado pelo usuário');
+    refetch();
+  }, [refetch]);
 
   // ✅ Funções utilitárias memoizadas
   const getStatusLabel = useCallback((status) => {
@@ -546,7 +554,7 @@ const PackagesList = () => {
         <div className="text-center">
           <AlertTriangle className="h-12 w-12 text-red-500 mx-auto mb-4" />
           <p className="text-red-600 mb-4">{error}</p>
-          <Button onClick={refetch} variant="outline">
+          <Button onClick={handleManualRefresh} variant="outline">
             <RefreshCw className="h-4 w-4 mr-2" />
             Tentar Novamente
           </Button>
@@ -565,7 +573,7 @@ const PackagesList = () => {
           </p>
         </div>
         <div className="flex gap-2 flex-wrap">
-          <Button onClick={refetch} variant="outline" disabled={isAnyLoading}>
+          <Button onClick={handleManualRefresh} variant="outline" disabled={isAnyLoading}>
             <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
             Atualizar
           </Button>

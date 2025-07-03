@@ -1,5 +1,5 @@
 // src/hooks/usePackages.js
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import apiService from '../services/apiService';
 
 const usePackages = () => {
@@ -7,9 +7,29 @@ const usePackages = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [initialized, setInitialized] = useState(false);
+  
+  // ✅ CONTROLE DE REQUISIÇÕES
+  const isRequestingRef = useRef(false);
+  const lastRequestTimeRef = useRef(0);
+  const MIN_REQUEST_INTERVAL = 2000; // 2 segundos entre requisições
 
-  const fetchPackages = useCallback(async () => {
+  const fetchPackages = useCallback(async (force = false) => {
+    // ✅ PREVENIR MÚLTIPLAS REQUISIÇÕES SIMULTÂNEAS
+    if (isRequestingRef.current && !force) {
+      console.log('📦 usePackages: Requisição já em andamento, ignorando...');
+      return;
+    }
+
+    // ✅ THROTTLING - MÍNIMO 2 SEGUNDOS ENTRE REQUISIÇÕES
+    const now = Date.now();
+    if (now - lastRequestTimeRef.current < MIN_REQUEST_INTERVAL && !force) {
+      console.log('📦 usePackages: Throttling ativo, aguardando...');
+      return;
+    }
+
     try {
+      isRequestingRef.current = true;
+      lastRequestTimeRef.current = now;
       setLoading(true);
       setError(null);
       
@@ -22,20 +42,13 @@ const usePackages = () => {
       let packagesData = [];
       
       if (result) {
-        // Formato esperado: { packages: [...] }
         if (result.packages && Array.isArray(result.packages)) {
           packagesData = result.packages;
-        }
-        // Formato alternativo: { data: [...] }
-        else if (result.data && Array.isArray(result.data)) {
+        } else if (result.data && Array.isArray(result.data)) {
           packagesData = result.data;
-        }
-        // Formato direto: [...]
-        else if (Array.isArray(result)) {
+        } else if (Array.isArray(result)) {
           packagesData = result;
-        }
-        // Formato com success: { success: true, data: [...] }
-        else if (result.success && result.data && Array.isArray(result.data)) {
+        } else if (result.success && result.data && Array.isArray(result.data)) {
           packagesData = result.data;
         }
       }
@@ -45,17 +58,31 @@ const usePackages = () => {
       
     } catch (err) {
       console.error('❌ usePackages: Erro ao buscar pacotes:', err);
-      setError(err.message || 'Erro ao carregar pacotes');
+      
+      // ✅ NÃO FAZER RETRY AUTOMÁTICO EM CASO DE 429
+      if (err.message.includes('429') || err.message.includes('Muitas requisições')) {
+        setError('Muitas requisições. Aguarde alguns segundos antes de tentar novamente.');
+        // ✅ AGUARDAR 30 SEGUNDOS ANTES DE PERMITIR NOVA REQUISIÇÃO
+        setTimeout(() => {
+          setError(null);
+        }, 30000);
+      } else {
+        setError(err.message || 'Erro ao carregar pacotes');
+      }
+      
       setPackages([]);
     } finally {
       setLoading(false);
       setInitialized(true);
+      isRequestingRef.current = false;
     }
   }, []);
 
+  // ✅ CARREGAR APENAS UMA VEZ
   useEffect(() => {
     if (!initialized) {
-      fetchPackages();
+      console.log('📦 usePackages: Carregamento inicial');
+      fetchPackages(true);
     }
   }, [fetchPackages, initialized]);
 
@@ -69,8 +96,11 @@ const usePackages = () => {
       
       console.log('✅ usePackages: Pacote criado:', result);
       
-      // ✅ RECARREGAR LISTA APÓS CRIAR
-      await fetchPackages();
+      // ✅ AGUARDAR 1 SEGUNDO ANTES DE RECARREGAR
+      setTimeout(() => {
+        fetchPackages(true);
+      }, 1000);
+      
       return result;
     } catch (err) {
       console.error('❌ usePackages: Erro ao criar pacote:', err);
@@ -81,7 +111,6 @@ const usePackages = () => {
     }
   }, [fetchPackages]);
 
-  // ✅ DEFINIR TODAS AS FUNÇÕES ANTES DO RETURN
   const updatePackage = useCallback(async (id, packageData) => {
     try {
       setLoading(true);
@@ -92,7 +121,10 @@ const usePackages = () => {
       
       console.log('✅ usePackages: Pacote atualizado:', result);
       
-      await fetchPackages();
+      setTimeout(() => {
+        fetchPackages(true);
+      }, 1000);
+      
       return result;
     } catch (err) {
       console.error('❌ usePackages: Erro ao atualizar pacote:', err);
@@ -113,7 +145,10 @@ const usePackages = () => {
       
       console.log('✅ usePackages: Pacote excluído:', result);
       
-      await fetchPackages();
+      setTimeout(() => {
+        fetchPackages(true);
+      }, 1000);
+      
       return result;
     } catch (err) {
       console.error('❌ usePackages: Erro ao excluir pacote:', err);
@@ -131,7 +166,10 @@ const usePackages = () => {
       
       console.log('✅ usePackages: Tracking atualizado:', result);
       
-      await fetchPackages();
+      setTimeout(() => {
+        fetchPackages(true);
+      }, 1000);
+      
       return result;
     } catch (err) {
       console.error('❌ usePackages: Erro ao atualizar tracking:', err);
@@ -149,7 +187,10 @@ const usePackages = () => {
       
       console.log('✅ usePackages: Pacotes importados:', result);
       
-      await fetchPackages();
+      setTimeout(() => {
+        fetchPackages(true);
+      }, 2000);
+      
       return result;
     } catch (err) {
       console.error('❌ usePackages: Erro ao importar pacotes:', err);
@@ -170,7 +211,10 @@ const usePackages = () => {
       
       console.log('✅ usePackages: Sincronização concluída:', result);
       
-      await fetchPackages();
+      setTimeout(() => {
+        fetchPackages(true);
+      }, 2000);
+      
       return result;
     } catch (err) {
       console.error('❌ usePackages: Erro na sincronização:', err);
@@ -191,7 +235,10 @@ const usePackages = () => {
       
       console.log('✅ usePackages: Sincronização completa concluída:', result);
       
-      await fetchPackages();
+      setTimeout(() => {
+        fetchPackages(true);
+      }, 3000);
+      
       return result;
     } catch (err) {
       console.error('❌ usePackages: Erro na sincronização completa:', err);
@@ -212,7 +259,10 @@ const usePackages = () => {
       
       console.log('✅ usePackages: Sincronização dos Correios concluída:', result);
       
-      await fetchPackages();
+      setTimeout(() => {
+        fetchPackages(true);
+      }, 2000);
+      
       return result;
     } catch (err) {
       console.error('❌ usePackages: Erro na sincronização dos Correios:', err);
@@ -223,9 +273,10 @@ const usePackages = () => {
     }
   }, [fetchPackages]);
 
+  // ✅ REFETCH MANUAL COM THROTTLING
   const refetch = useCallback(() => {
     console.log('🔄 usePackages: Refresh manual solicitado');
-    fetchPackages();
+    fetchPackages(true);
   }, [fetchPackages]);
 
   return {
@@ -235,11 +286,11 @@ const usePackages = () => {
     initialized,
     fetchPackages: refetch,
     createPackage,
-    updatePackage,        // ← Agora está definida
-    deletePackage,        // ← Agora está definida
-    updateTracking,       // ← Agora está definida
+    updatePackage,
+    deletePackage,
+    updateTracking,
     importPackages,
-    syncWithAfterShip,    // ← Agora está definida
+    syncWithAfterShip,
     syncAllFromAfterShip,
     syncCorreiosFromAfterShip,
     refetch
